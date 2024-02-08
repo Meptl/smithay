@@ -26,7 +26,7 @@ fn save_buffer_to_png(
 ) -> Result<(), Box<dyn std::error::Error>> {
     println!("Saving image");
     let mapping = renderer
-        .copy_framebuffer(Rectangle::from_loc_and_size((0, 0), (w, h)), Fourcc::Argb8888)
+        .copy_framebuffer(Rectangle::from_loc_and_size((0, 0), (w, h)), Fourcc::Abgr8888)
         .expect("Failed to map framebuffer");
     let copy = renderer.map_texture(&mapping).expect("Failed to read mapping");
     image::save_buffer(path, copy, w as u32, h as u32, image::ColorType::Rgba8)
