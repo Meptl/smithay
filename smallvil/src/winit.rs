@@ -2,8 +2,11 @@ use std::time::Duration;
 
 use smithay::{
     backend::{
+        allocator::Fourcc,
+        input::{InputEvent, KeyState, KeyboardKeyEvent},
         renderer::{
             damage::OutputDamageTracker, element::surface::WaylandSurfaceRenderElement, gles::GlesRenderer,
+            ExportMem,
         },
         winit::{self, WinitEvent},
     },
@@ -11,8 +14,30 @@ use smithay::{
     reexports::calloop::EventLoop,
     utils::{Rectangle, Transform},
 };
+use std::path::Path;
 
 use crate::{CalloopData, Smallvil};
+
+fn save_buffer_to_png(
+    renderer: &mut GlesRenderer,
+    path: &Path,
+    w: i32,
+    h: i32,
+) -> Result<(), Box<dyn std::error::Error>> {
+    println!("Saving image");
+    if path.exists() {
+        return Ok(());
+    }
+
+    let mapping = renderer
+        .copy_framebuffer(Rectangle::from_loc_and_size((0, 0), (w, h)), Fourcc::Argb2101010)
+        .expect("Failed to map framebuffer");
+    let copy = renderer.map_texture(&mapping).expect("Failed to read mapping");
+    image::save_buffer(path, copy, w as u32, h as u32, image::ColorType::Rgba8)
+        .expect("Failed to save image");
+    println!("Saved image");
+    Ok(())
+}
 
 pub fn init_winit(
     event_loop: &mut EventLoop<CalloopData>,
@@ -63,7 +88,23 @@ pub fn init_winit(
                     None,
                 );
             }
-            WinitEvent::Input(event) => state.process_input_event(event),
+            WinitEvent::Input(event) => {
+                match event {
+                    InputEvent::Keyboard { event, .. } => {
+                        if event.key_code() == 4 && event.state() == KeyState::Pressed {
+                            println!("Good key event");
+                            let path = Path::new("foo.png");
+                            if let Err(e) =
+                                save_buffer_to_png(backend.renderer(), path, mode.size.w, mode.size.h)
+                            {
+                                eprintln!("Failed to save buffer to 'foo.png': {}", e);
+                            }
+                        }
+                    }
+                    _ => {}
+                };
+                state.process_input_event(event);
+            }
             WinitEvent::Redraw => {
                 let size = backend.window_size();
                 let damage = Rectangle::from_loc_and_size((0, 0), size);
