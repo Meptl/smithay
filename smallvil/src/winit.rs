@@ -25,12 +25,8 @@ fn save_buffer_to_png(
     h: i32,
 ) -> Result<(), Box<dyn std::error::Error>> {
     println!("Saving image");
-    if path.exists() {
-        return Ok(());
-    }
-
     let mapping = renderer
-        .copy_framebuffer(Rectangle::from_loc_and_size((0, 0), (w, h)), Fourcc::Argb2101010)
+        .copy_framebuffer(Rectangle::from_loc_and_size((0, 0), (w, h)), Fourcc::Argb8888)
         .expect("Failed to map framebuffer");
     let copy = renderer.map_texture(&mapping).expect("Failed to read mapping");
     image::save_buffer(path, copy, w as u32, h as u32, image::ColorType::Rgba8)
@@ -70,6 +66,8 @@ pub fn init_winit(
 
     let mut damage_tracker = OutputDamageTracker::from_output(&output);
 
+    let mut screenshot_requested = false;
+
     std::env::set_var("WAYLAND_DISPLAY", &state.socket_name);
 
     event_loop.handle().insert_source(winit, move |event, _, data| {
@@ -93,12 +91,7 @@ pub fn init_winit(
                     InputEvent::Keyboard { event, .. } => {
                         if event.key_code() == 4 && event.state() == KeyState::Pressed {
                             println!("Good key event");
-                            let path = Path::new("foo.png");
-                            if let Err(e) =
-                                save_buffer_to_png(backend.renderer(), path, mode.size.w, mode.size.h)
-                            {
-                                eprintln!("Failed to save buffer to 'foo.png': {}", e);
-                            }
+                            screenshot_requested = true;
                         }
                     }
                     _ => {}
@@ -121,6 +114,16 @@ pub fn init_winit(
                     [0.1, 0.1, 0.1, 1.0],
                 )
                 .unwrap();
+                if screenshot_requested {
+                    let path = Path::new("foo.png");
+                    let current_mode = output.current_mode().unwrap();
+                    if let Err(e) =
+                        save_buffer_to_png(backend.renderer(), path, current_mode.size.w, current_mode.size.h)
+                    {
+                        eprintln!("Failed to save buffer to 'foo.png': {}", e);
+                    }
+                    screenshot_requested = false;
+                }
                 backend.submit(Some(&[damage])).unwrap();
 
                 state.space.elements().for_each(|window| {
